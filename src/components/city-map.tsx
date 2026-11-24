@@ -255,10 +255,7 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
           setPosition(null);
           setLocationStatus(locating ? "" : "Buscando sua localização…");
           setLocating(!locating);
-        }}>
-        <Navigation size={17} aria-hidden="true" />
-        <span aria-hidden="true">Localização {locating ? "ligada" : "desligada"}</span>
-      </button>
+        }}><Navigation size={20} aria-hidden="true" /></button>
     </div>
     <dialog ref={coverageDialog} className="coverage-dialog" aria-labelledby="coverage-heading" aria-describedby="coverage-description">
       <h2 id="coverage-heading">Fora da área de cobertura</h2>
