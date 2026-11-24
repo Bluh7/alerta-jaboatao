@@ -1,16 +1,12 @@
-import { isInJaboatao, type Location } from "./territory";
+import { isValidLocation, type Location } from "./territory";
 
-export function watchUserLocation(geolocation: Geolocation, update: (position: Location | null, status: string, outsideCoverage?: true) => void,
+export function watchUserLocation(geolocation: Geolocation, update: (position: Location | null, status: string) => void,
   denied: () => void) {
   let active = true;
   const watch = geolocation.watchPosition(({ coords }) => {
     if (!active) return;
     const point = { lat: coords.latitude, lng: coords.longitude };
-    if (isInJaboatao(point)) {
-      update(point, "Sua localização está sendo exibida no mapa.");
-    } else {
-      update(null, "Você está fora da área de cobertura de Jaboatão. Sua localização não será exibida.", true);
-    }
+    update(isValidLocation(point) ? point : null, "");
   }, error => {
     if (!active) return;
     if (error.code === error.PERMISSION_DENIED) {

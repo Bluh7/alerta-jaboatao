@@ -17,7 +17,7 @@ const tripOverviewMinZoom = 10;
 function fitTrip(map: L.Map, trip: TripPreview) {
   const bounds = L.latLngBounds([...trip.path, trip.origin, trip.destination]);
   const center = bounds.getCenter();
-  const anchor = isInJaboatao(center) ? center : trip.origin;
+  const anchor = isInJaboatao(center) ? center : isInJaboatao(trip.origin) ? trip.origin : trip.destination;
   const projected = map.project(anchor, 0);
   const nw = map.project(bounds.getNorthWest(), 0);
   const se = map.project(bounds.getSouthEast(), 0);
@@ -88,22 +88,26 @@ function MapPinLayer({ map, location, incident, active, onOpen }: {
   );
 }
 
-export default function CityMap({ incidents, selected, active, target, trip, onPick, onOpen }: {
+export default function CityMap({ incidents, selected, active, target, trip, position, following = false, onPositionChange, onPick, onOpen }: {
   incidents: Incident[];
   selected: Location | null;
   active: Incident | null;
   target: Location | null;
   trip: TripPreview | null;
+  position: Location | null;
+  following?: boolean;
+  onPositionChange: (position: Location | null) => void;
   onPick: (location: Location | null) => void;
   onOpen: (incident: Incident) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const coverageDialog = useRef<HTMLDialogElement>(null);
+  const viewingOutsideLocation = useRef(false);
+  const locationArrow = useRef<HTMLSpanElement>(null);
+  const heading = useRef<number | null>(null);
   const [map, setMap] = useState<L.Map | null>(null);
   const [tileError, setTileError] = useState(false);
   const [zoom, setZoom] = useState(cameraZoom.initial);
   const [locating, setLocating] = useState(false);
-  const [position, setPosition] = useState<Location | null>(null);
   const [locationStatus, setLocationStatus] = useState("");
 
   useEffect(() => {
@@ -116,29 +120,60 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
     }
 
     let focused = false;
-    let wasOutside = false;
-    return watchUserLocation(geolocation, (point, status, outsideCoverage) => {
-      setPosition(point);
-      setLocationStatus(outsideCoverage ? "" : status);
-      const dialog = coverageDialog.current;
-      if (outsideCoverage && !wasOutside && dialog && !dialog.open) dialog.showModal();
-      if (outsideCoverage) wasOutside = true;
-      if (point && !focused) {
+    return watchUserLocation(geolocation, (point, status) => {
+      onPositionChange(point);
+      setLocationStatus(status);
+      if (point) {
+        const outside = !isInJaboatao(point);
+        const coverageChanged = outside !== viewingOutsideLocation.current;
+        viewingOutsideLocation.current = outside;
+        if (focused && !coverageChanged) return;
         focused = true;
         map.setView(point, map.getZoom(), { animate: false });
       }
-      if (point) wasOutside = false;
-    }, () => setLocating(false));
-  }, [map, locating]);
+    }, () => {
+      if (viewingOutsideLocation.current) {
+        viewingOutsideLocation.current = false;
+        if (!isInJaboatao(map.getCenter())) map.setView(initialCenter, cameraZoom.initial);
+      }
+      setLocating(false);
+    });
+  }, [map, locating, onPositionChange]);
+
+  useEffect(() => {
+    if (!locating) return;
+    function orient(event: DeviceOrientationEvent) {
+      const compass = event as DeviceOrientationEvent & { webkitCompassHeading?: number };
+      const bearing = compass.webkitCompassHeading ??
+        (event.absolute && event.alpha !== null ? 360 - event.alpha : null);
+      if (bearing === null || !Number.isFinite(bearing) || bearing < 0) return;
+      heading.current = bearing + (screen.orientation?.angle ?? 0);
+      locationArrow.current?.style.setProperty("--location-heading", `${heading.current}deg`);
+    }
+    window.addEventListener("deviceorientationabsolute", orient);
+    window.addEventListener("deviceorientation", orient);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", orient);
+      window.removeEventListener("deviceorientation", orient);
+      heading.current = null;
+    };
+  }, [locating]);
 
   useEffect(() => {
     if (!map || !position) return;
-    const marker = L.circleMarker(position, {
-      interactive: false, radius: 8, color: "#fff", weight: 3,
-      fillColor: "#175ec4", fillOpacity: 1, className: "user-location-marker",
+    const arrow = document.createElement("span");
+    arrow.className = "user-location-arrow";
+    locationArrow.current = arrow;
+    if (heading.current !== null) arrow.style.setProperty("--location-heading", `${heading.current}deg`);
+    const marker = L.marker(position, {
+      interactive: false, keyboard: false, title: following ? "Localização compartilhada" : "Minha localização",
+      icon: L.divIcon({ className: "user-location-marker", html: arrow, iconSize: [20, 20], iconAnchor: [10, 10] }),
     }).addTo(map);
-    return () => { marker.remove(); };
-  }, [map, position]);
+    return () => {
+      locationArrow.current = null;
+      marker.remove();
+    };
+  }, [following, map, position]);
 
   useEffect(() => {
     if (!container.current) return;
@@ -173,6 +208,7 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
         returning = false;
         return;
       }
+      if (following || viewingOutsideLocation.current) return;
       const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (returning || reduceMotion) {
         returning = false;
@@ -186,7 +222,7 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
     });
     setMap(instance);
     return () => { instance.remove(); };
-  }, []);
+  }, [following]);
 
   useEffect(() => {
     if (map && target) map.setView(target, map.getZoom(), { animate: false });
@@ -207,22 +243,28 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
   }, [map, trip]);
 
   useEffect(() => {
-    if (!map) return;
+    if (following && map && position) map.setView(position, Math.max(map.getZoom(), 16), { animate: false });
+  }, [following, map, position]);
+
+  useEffect(() => {
+    if (!map || following) return;
     function pick(event: L.LeafletMouseEvent) {
       const { lat, lng } = event.latlng;
       onPick(isInJaboatao({ lat, lng }) ? { lat, lng } : null);
     }
     map.on("click", pick);
     return () => { map.off("click", pick); };
-  }, [map, onPick]);
+  }, [following, map, onPick]);
 
   function pickCenter() {
-    if (!map) return;
+    if (!map || following) return;
     const { lat, lng } = map.getCenter();
     onPick(isInJaboatao({ lat, lng }) ? { lat, lng } : null);
   }
 
   const markerSize = Math.max(30, 40 + (zoom - cameraZoom.min) * 3.5);
+  const recenterLabel = position ? (following ? "Centralizar na localização compartilhada" : "Centralizar na minha localização")
+    : trip ? "Mostrar rota inteira" : "Recentrar em Jaboatão";
 
   return <div className="map-shell" style={{ "--incident-pin-size": `${markerSize}px` } as CSSProperties}>
     <div ref={container} className="city-map" aria-label="Mapa de Jaboatão dos Guararapes e arredores"
@@ -232,7 +274,8 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
           pickCenter();
         }
       }} />
-    <span className="sr-only" id="map-keyboard-help">Use as setas para mover o mapa e Enter para marcar uma ocorrência no centro.</span>
+    <span className="sr-only" id="map-keyboard-help">{following ? "Use as setas para mover o mapa." :
+      "Use as setas para mover o mapa e Enter para marcar uma ocorrência no centro."}</span>
     {map && incidents.map(incident => <MapPinLayer key={incident.id} map={map}
       location={incident} incident={incident} active={active?.id === incident.id} onOpen={onOpen} />)}
     {map && selected && <MapPinLayer map={map} location={selected} />}
@@ -243,25 +286,31 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
         <button type="button" aria-label="Afastar mapa" disabled={!map || zoom <= (trip ? tripOverviewMinZoom : cameraZoom.min)}
           onClick={() => map?.zoomOut()}><Minus size={21} /></button>
       </div>
-      <button className="recenter" type="button" aria-label={trip ? "Mostrar rota inteira" : "Recentrar em Jaboatão"}
-        title={trip ? "Mostrar rota inteira" : "Recentrar em Jaboatão"} onClick={() => {
+      <button className="recenter" type="button" aria-label={recenterLabel}
+        title={recenterLabel} onClick={() => {
           if (!map) return;
-          if (trip) fitTrip(map, trip);
+          if (position) map.setView(position, map.getZoom());
+          else if (trip) fitTrip(map, trip);
           else map.setView(initialCenter, cameraZoom.initial);
         }}><LocateFixed size={20} /></button>
-      <button className="location-toggle" type="button" aria-label="Minha localização" aria-pressed={locating}
+      {!following && <button className="location-toggle" type="button" aria-label="Minha localização" aria-pressed={locating}
         title={locating ? "Parar de mostrar minha localização" : "Mostrar minha localização"} disabled={!map}
         onClick={() => {
-          setPosition(null);
+          if (!locating) {
+            const orientation = window.DeviceOrientationEvent as typeof DeviceOrientationEvent & {
+              requestPermission?: () => Promise<"granted" | "denied">;
+            };
+            void orientation?.requestPermission?.().catch(() => {});
+          }
+          if (locating && viewingOutsideLocation.current && map) {
+            viewingOutsideLocation.current = false;
+            if (!isInJaboatao(map.getCenter())) map.setView(initialCenter, cameraZoom.initial);
+          }
+          onPositionChange(null);
           setLocationStatus(locating ? "" : "Buscando sua localização…");
           setLocating(!locating);
-        }}><Navigation size={20} aria-hidden="true" /></button>
+        }}><Navigation size={20} aria-hidden="true" /></button>}
     </div>
-    <dialog ref={coverageDialog} className="coverage-dialog" aria-labelledby="coverage-heading" aria-describedby="coverage-description">
-      <h2 id="coverage-heading">Fora da área de cobertura</h2>
-      <p id="coverage-description">Sua localização só é exibida dentro de Jaboatão dos Guararapes.</p>
-      <form method="dialog"><button type="submit">OK</button></form>
-    </dialog>
     <div className="map-statuses">
       {tileError && <div className="tile-status" role="status">O mapa de ruas está indisponível.</div>}
       <div role="status">{locationStatus && <div className="tile-status">{locationStatus}</div>}</div>

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { it } from "vitest";
+import { it, vi } from "vitest";
 import { POST } from "../../app/api/routes/route";
 import { RoutePlanner } from "../../src/components/route-planner";
 import { RouteSummary } from "../../src/components/route-summary";
@@ -69,8 +69,52 @@ it("troca o servidor e o tempo por modo e preserva o perfil nas tentativas de de
   }
 });
 
+it("usa a localização como origem padrão e mantém a busca manual sem posição válida", () => {
+  const props = { open: true, onClose() {}, onResult() {} };
+  const nearby = renderToStaticMarkup(createElement(RoutePlanner, { ...props, position: trip.origin }));
+  assert.match(nearby, /type="checkbox"[^>]*checked=""/);
+  assert.match(nearby, /Usar minha localização como origem/);
+  assert.doesNotMatch(nearby, /id="route-origin"/);
+  assert.match(nearby, /id="route-destination"/);
+
+  for (const position of [null, { lat: 91, lng: -34.9 }]) {
+    const manual = renderToStaticMarkup(createElement(RoutePlanner, { ...props, position }));
+    assert.match(manual, /id="route-origin"/);
+    assert.doesNotMatch(manual, /Usar minha localização como origem/);
+  }
+});
+
+it("aceita uma origem externa em produção e exige um destino dentro do município", async () => {
+  const origin = { lat: -8.05, lng: -34.9 };
+  const calculate = (start = origin, destination = trip.destination) => POST(new Request("https://alerta.example/api/routes", {
+    method: "POST", body: JSON.stringify({ origin: start, destination }),
+  }));
+  const fetchRoute = vi.fn(async () => Response.json({
+    code: "Ok",
+    routes: [{ distance: 12000, duration: 900, geometry: {
+      coordinates: [[origin.lng, origin.lat], [trip.destination.lng, trip.destination.lat]],
+    } }],
+  }));
+  vi.stubEnv("OSRM_URL", "https://routing.test");
+  vi.stubGlobal("fetch", fetchRoute);
+  try {
+    vi.stubEnv("NODE_ENV", "production");
+    const planner = renderToStaticMarkup(createElement(RoutePlanner, {
+      open: true, position: origin, onClose() {}, onResult() {},
+    }));
+    assert.match(planner, /type="checkbox"[^>]*checked=""/);
+    assert.equal((await calculate()).status, 200);
+    assert.equal((await calculate({ lat: 91, lng: 0 })).status, 400);
+    assert.equal((await calculate(origin, { ...origin, label: "Fora do município" })).status, 400);
+    assert.equal(fetchRoute.mock.calls.length, 1);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  }
+});
+
 it("mostra os modos somente na comparação e indica qual está selecionado", () => {
-  const planner = renderToStaticMarkup(createElement(RoutePlanner, { open: true, onClose() {}, onResult() {} }));
+  const planner = renderToStaticMarkup(createElement(RoutePlanner, { open: true, position: null, onClose() {}, onResult() {} }));
   assert.doesNotMatch(planner, /Modo de transporte/);
   const props = {
     trip, preview: null, index: 0, count: 0, error: "", comparing: true,
@@ -82,15 +126,18 @@ it("mostra os modos somente na comparação e indica qual está selecionado", ()
     assert.equal([...html.matchAll(/aria-pressed="true"/g)].length, 1);
     assert.match(html, new RegExp(`aria-pressed="true"[^>]*><svg.*?</svg>${label}</button>`));
     assert.doesNotMatch(html, /Escolher esta rota/);
-    assert.doesNotMatch(html, /Copiar link|Baixar mapa offline/);
+    assert.doesNotMatch(html, /Copiar link|Compartilhar ao vivo/);
   }
   const confirmed = renderToStaticMarkup(createElement(RouteSummary, {
     ...props, mode: "bike", comparing: false, count: 1,
     preview: { ...trip, path: [trip.origin, trip.destination], duration: 360, distance: 1200, nearbyIncidents: 0 },
   }));
   assert.match(confirmed, /Comparar rotas/);
+  assert.match(confirmed, /aria-expanded="false" aria-controls="route-summary-options"/);
+  assert.match(confirmed, /id="route-summary-options"[^>]* inert=""/);
   assert.match(confirmed, /Copiar link/);
-  assert.match(confirmed, /Baixar mapa offline/);
+  assert.match(confirmed, /Ative sua localização para compartilhar ao vivo/);
+  assert.doesNotMatch(confirmed, /Baixar mapa offline/);
   assert.match(confirmed, /6 min/);
   assert.doesNotMatch(confirmed, /Modo de transporte/);
 });

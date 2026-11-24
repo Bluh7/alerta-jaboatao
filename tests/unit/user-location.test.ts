@@ -28,14 +28,16 @@ function simulateWatch() {
 }
 
 describe("acompanhamento da localização", () => {
-  it("atualiza a posição em Jaboatão, oculta ao sair e volta a exibir ao retornar", () => {
+  it("acompanha a posição dentro e fora de Jaboatão e descarta coordenadas inválidas", () => {
     const watch = simulateWatch();
     watch.move(-8.145, -35.005);
-    expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.145, lng: -35.005 }, expect.any(String));
+    expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.145, lng: -35.005 }, "");
     watch.move(-8.16178, -34.92483);
     expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.16178, lng: -34.92483 }, expect.any(String));
     watch.move(-8.05, -34.9);
-    expect(watch.update).toHaveBeenLastCalledWith(null, expect.stringContaining("fora da área de cobertura"), true);
+    expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.05, lng: -34.9 }, "");
+    watch.move(91, -34.9);
+    expect(watch.update).toHaveBeenLastCalledWith(null, "");
     watch.move(-8.145, -35.005);
     expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.145, lng: -35.005 }, expect.any(String));
     watch.stop();

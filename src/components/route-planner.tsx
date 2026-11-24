@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Circle, LoaderCircle, MapPin, Route, X } from "lucide-react";
 import type { RouteAddress, Trip } from "../lib/trip";
+import { isValidLocation, type Location } from "../lib/territory";
 
 type Field = "origin" | "destination";
 const fields = [
@@ -22,8 +23,9 @@ async function request<T>(url: string, body: object, signal: AbortSignal): Promi
   return response.json();
 }
 
-export function RoutePlanner({ open, onClose, onResult }: {
+export function RoutePlanner({ open, position, onClose, onResult }: {
   open: boolean;
+  position: Location | null;
   onClose: () => void;
   onResult: (trip: Trip) => void;
 }) {
@@ -37,12 +39,17 @@ export function RoutePlanner({ open, onClose, onResult }: {
   const [activeField, setActiveField] = useState<Field | null>(null);
   const [highlight, setHighlight] = useState(-1);
   const [lookup, setLookup] = useState<{ field: Field; query: string; text: string } | null>(null);
+  const [useCurrentOrigin, setUseCurrentOrigin] = useState(true);
+  const currentOrigin = position && isValidLocation(position) ? { ...position, label: "Minha localização" } : null;
+  const locationOrigin = useCurrentOrigin ? currentOrigin : null;
+  const effectiveChosen = locationOrigin ? { ...chosen, origin: locationOrigin } : chosen;
   const activeQuery = activeField ? addresses[activeField].trim() : "";
   const hasMatches = Boolean(activeField && matches[activeField].length);
-  const hasChoice = Boolean(activeField && chosen[activeField]);
+  const hasChoice = Boolean(activeField && effectiveChosen[activeField]);
 
   useEffect(() => {
     if (!open) return;
+    setUseCurrentOrigin(true);
     const dialog = dialogRef.current;
     dialog?.showModal();
     return () => {
@@ -112,7 +119,7 @@ export function RoutePlanner({ open, onClose, onResult }: {
     pending.current = controller;
     setError("");
     try {
-      const missing = fields.filter(({ key }) => !chosen[key] && matches[key].length === 0);
+      const missing = fields.filter(({ key }) => !effectiveChosen[key] && matches[key].length === 0);
       if (missing.length) setWorking("Buscando endereços…");
       const found = await Promise.all(missing.map(async ({ key }) => ({
         key, results: await request<RouteAddress[]>("/api/route-addresses", { query: addresses[key] }, controller.signal),
@@ -122,7 +129,7 @@ export function RoutePlanner({ open, onClose, onResult }: {
       const nextMatches = { ...matches };
       const nextChosen = { ...chosen };
       for (const { key } of fields) {
-        if (!nextChosen[key] && matches[key].length === 1) nextChosen[key] = matches[key][0];
+        if (!effectiveChosen[key] && matches[key].length === 1) nextChosen[key] = matches[key][0];
       }
       for (const { key, results } of found) {
         nextMatches[key] = results;
@@ -139,7 +146,8 @@ export function RoutePlanner({ open, onClose, onResult }: {
         return;
       }
 
-      const { origin, destination } = nextChosen;
+      const origin = locationOrigin ?? nextChosen.origin;
+      const { destination } = nextChosen;
       if (!origin || !destination) return;
       onResult({ origin, destination });
     } catch (reason) {
@@ -156,7 +164,7 @@ export function RoutePlanner({ open, onClose, onResult }: {
   }
 
   if (!open) return null;
-  const needsSelection = fields.some(({ key }) => matches[key].length > 1 && !chosen[key]);
+  const needsSelection = fields.some(({ key }) => matches[key].length > 1 && !effectiveChosen[key]);
 
   return <dialog id="route-planner" className="route-planner" aria-labelledby="route-heading" ref={dialogRef}
     onCancel={event => { event.preventDefault(); close(); }}>
@@ -168,7 +176,16 @@ export function RoutePlanner({ open, onClose, onResult }: {
       <button type="button" className="close-button" aria-label="Fechar planejador de rota" onClick={close}><X size={20} /></button>
     </header>
     <form className="route-form" onSubmit={submit}>
+      {currentOrigin && <label className="route-current-origin">
+        <input type="checkbox" checked={useCurrentOrigin} disabled={Boolean(working)} onChange={event => {
+          setUseCurrentOrigin(event.target.checked);
+          setActiveField(null);
+          setLookup(null);
+          setError("");
+        }} /> Usar minha localização como origem
+      </label>}
       {fields.map(({ key, label, placeholder, Icon }) => {
+        if (key === "origin" && locationOrigin) return null;
         const expanded = activeField === key && !chosen[key] && !working && matches[key].length > 0;
         const listId = `route-${key}-suggestions`;
         return <div className="route-field" key={key} onBlur={event => {

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Bike, CarFront, Check, ChevronLeft, ChevronRight, Download, Footprints, Link2, MapPin, X } from "lucide-react";
-import { downloadRouteFile } from "../lib/route-export";
+import { Bike, CarFront, Check, ChevronDown, ChevronLeft, ChevronRight, Footprints, GitCompareArrows, Link2, MapPin, X } from "lucide-react";
+import { LiveRouteShare } from "./live-route-share";
 import { routeShareUrl } from "../lib/shared-route";
+import type { Location } from "../lib/territory";
 import { incidentRadiusMeters, travelModes, type TravelMode, type Trip, type TripPreview } from "../lib/trip";
 
 const modeDetails = {
@@ -10,9 +11,10 @@ const modeDetails = {
   bike: { label: "Bicicleta", Icon: Bike },
 };
 
-export function RouteSummary({ trip, preview, index, count, mode, error, comparing, onMode, onBrowse, onConfirm, onCompare, onClose }: {
+export function RouteSummary({ trip, preview, position, index, count, mode, error, comparing, onMode, onBrowse, onConfirm, onCompare, onClose }: {
   trip: Trip;
   preview: TripPreview | null;
+  position?: Location | null;
   index: number;
   count: number;
   mode: TravelMode;
@@ -28,23 +30,10 @@ export function RouteSummary({ trip, preview, index, count, mode, error, compari
   const time = preview && Math.max(1, Math.round(preview.duration / 60));
   const distance = preview && (preview.distance / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
   const [shareStatus, setShareStatus] = useState("");
-  const [sharing, setSharing] = useState(false);
   const [manualLink, setManualLink] = useState("");
-
-  async function download() {
-    if (!preview) return;
-    setSharing(true);
-    setShareStatus("");
-    try {
-      const hasStreets = await downloadRouteFile(preview, modeDetails[mode].label);
-      setShareStatus(hasStreets ? "Arquivo baixado. Envie-o como anexo para abrir offline." :
-        "Rota baixada com o limite de Jaboatão. O mapa de ruas estava indisponível.");
-    } catch {
-      setShareStatus("Não foi possível baixar o arquivo. Tente novamente.");
-    } finally {
-      setSharing(false);
-    }
-  }
+  const [expanded, setExpanded] = useState(false);
+  const collapsed = !comparing && !expanded && Boolean(preview);
+  const ModeIcon = modeDetails[mode].Icon;
 
   async function copyLink() {
     if (!preview) return;
@@ -59,7 +48,19 @@ export function RouteSummary({ trip, preview, index, count, mode, error, compari
     }
   }
 
-  return <section className="action-sheet route-summary" aria-labelledby="route-summary-heading">
+  return <section className={`action-sheet route-summary${collapsed ? " route-collapsed" : ""}`} aria-labelledby="route-summary-heading">
+    {!comparing && preview && <button type="button" className="route-disclosure"
+      aria-expanded={!collapsed} aria-controls="route-summary-options"
+      aria-label={collapsed ? "Expandir opções da rota" : "Recolher opções da rota"}
+      onClick={() => setExpanded(collapsed)}>
+      <ModeIcon size={18} aria-hidden="true" />
+      <strong>{time} min</strong>
+      <span className="route-disclosure-destination">{trip.destination.label}</span>
+      <span className="route-live-indicator">Ao vivo</span>
+      <ChevronDown size={18} aria-hidden="true" />
+    </button>}
+    <div id="route-summary-options" className="route-options" inert={collapsed}>
+    <div className="route-options-content">
     <div className="sheet-header">
       <div>
         <h2 id="route-summary-heading">
@@ -78,10 +79,11 @@ export function RouteSummary({ trip, preview, index, count, mode, error, compari
           <Icon size={18} aria-hidden="true" />{label}
         </button>;
       })}
-    </div> : <p>{modeDetails[mode].label}</p>}
+    </div> : null}
     {preview ? <div className="route-stats" aria-live="polite">
       <div className="route-stats-heading">
-        <strong>{time} min · {distance} km</strong>
+        <strong>{time} min</strong><span>{distance} km</span>
+        {!comparing && <span className="route-confirmed-mode"><ModeIcon size={16} aria-hidden="true" />{modeDetails[mode].label}</span>}
         {index === 0 && count > 1 && <span className="route-recommended">Recomendada</span>}
       </div>
       <p>{nearby === 0 ? `Nenhum registro a até ${incidentRadiusMeters} m do trajeto.` :
@@ -91,11 +93,11 @@ export function RouteSummary({ trip, preview, index, count, mode, error, compari
       <button type="button" className="route-compare-button" onClick={() => onMode(mode)}>Tentar novamente</button>
     </> : <p role="status">Calculando rotas · {modeDetails[mode].label}…</p>}
     {comparing && preview && <div className="route-comparison-controls">
-      <button type="button" className="close-button" aria-label="Ver rota anterior" disabled={index === 0}
+      {count > 1 && <><button type="button" className="close-button" aria-label="Ver rota anterior" disabled={index === 0}
         onClick={() => onBrowse(index - 1)}><ChevronLeft size={21} /></button>
       <button type="button" className="close-button" aria-label="Ver próxima rota" disabled={index === count - 1}
-        onClick={() => onBrowse(index + 1)}><ChevronRight size={21} /></button>
-      <button type="button" className="route-submit" onClick={onConfirm}><Check size={19} aria-hidden="true" />Escolher esta rota</button>
+        onClick={() => onBrowse(index + 1)}><ChevronRight size={21} /></button></>}
+      <button type="button" className="route-submit" onClick={() => { setExpanded(false); onConfirm(); }}><Check size={19} aria-hidden="true" />Escolher esta rota</button>
     </div>}
     {!comparing && <>
       <div className="route-share-actions">
@@ -103,19 +105,19 @@ export function RouteSummary({ trip, preview, index, count, mode, error, compari
           setShareStatus("");
           setManualLink("");
           onCompare();
-        }}>Comparar rotas</button>
+        }}><GitCompareArrows size={17} aria-hidden="true" />Comparar rotas</button>
         {preview && <>
           <button type="button" className="route-compare-button" onClick={() => void copyLink()}>
             <Link2 size={17} aria-hidden="true" />Copiar link
-          </button>
-          <button type="button" className="route-compare-button" disabled={sharing} onClick={() => void download()}>
-            <Download size={17} aria-hidden="true" />{sharing ? "Preparando mapa…" : "Baixar mapa offline"}
           </button>
         </>}
       </div>
       {manualLink && <input className="route-share-link" aria-label="Link da rota" readOnly value={manualLink}
         onFocus={event => event.currentTarget.select()} />}
       {shareStatus && <p role="status">{shareStatus}</p>}
+      {preview && <LiveRouteShare position={position ?? null} route={preview} mode={mode} />}
     </>}
+    </div>
+    </div>
   </section>;
 }

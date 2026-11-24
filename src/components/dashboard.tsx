@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
   const [showRoutePlanner, setShowRoutePlanner] = useState(false);
+  const [userPosition, setUserPosition] = useState<Location | null>(null);
   const [trip, setTrip] = useState<Trip | null>(null);
   const [routeChoice, setRouteChoice] = useState<RouteChoice>({ mode: "car", index: 0, result: null, error: "" });
   const [confirmedRoute, setConfirmedRoute] = useState<RouteChoice | null>(null);
@@ -292,7 +293,7 @@ export default function Dashboard() {
 
   return <main className={panelOpen ? "app-map panel-open" : "app-map"}>
     <CityMap incidents={visible} selected={selected} active={active} target={mapTarget} trip={displayedTrip}
-      onPick={pick} onOpen={openIncident} />
+      position={userPosition} onPositionChange={setUserPosition} onPick={pick} onOpen={openIncident} />
 
     <header className="map-header">
       <h1 className="sr-only">Alerta Jaboatão</h1>
@@ -325,7 +326,7 @@ export default function Dashboard() {
     </header>
 
     {showDiary && <IncidentDiary incidents={incidents} status={diaryStatus} onSelect={focusDiaryEntry} onClose={closeDiary} />}
-    <RoutePlanner open={showRoutePlanner} onClose={() => setShowRoutePlanner(false)} onResult={result => {
+    <RoutePlanner open={showRoutePlanner} position={userPosition} onClose={() => setShowRoutePlanner(false)} onResult={result => {
       clearSharedRouteLink();
       setTrip(result);
       setConfirmedRoute(null);
@@ -345,7 +346,7 @@ export default function Dashboard() {
 
       {selected ? <IncidentPicker saving={saving} onSelect={save} onClose={closePanel} /> :
       active ? <IncidentDetails key={active.id} incident={active} onClose={closePanel} onUpdate={updateIncident} onHide={hideIncident} /> :
-      trip ? <RouteSummary trip={trip} preview={displayedTrip} index={routeChoice.index}
+      trip ? <RouteSummary trip={trip} preview={displayedTrip} position={userPosition} index={routeChoice.index}
         mode={routeChoice.mode} count={routeChoice.result?.options.length ?? 0}
         comparing={comparingRoutes} error={routeChoice.error}
         onMode={mode => void loadRoutes(trip, mode)}

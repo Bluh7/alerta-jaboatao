@@ -16,8 +16,11 @@ it("preserva o traçado, os endereços e o modo em um link reabrível", () => {
   });
 });
 
-it("rejeita links inválidos e origem fora do município", () => {
+it("reabre rotas com origem externa e rejeita links com destino externo", () => {
   assert.equal(readSharedRoute("#rota=?"), null);
-  const url = routeShareUrl("https://alerta.example/", { ...route, origin: { ...origin, lat: 0 } }, "foot");
+  const outside = { ...origin, lat: -8.05, lng: -34.9 };
+  const shared = routeShareUrl("https://alerta.example/", { ...route, origin: outside, path: [outside, destination] }, "foot");
+  assert.deepEqual(readSharedRoute(new URL(shared).hash)?.route.origin, outside);
+  const url = routeShareUrl("https://alerta.example/", { ...route, destination: outside }, "foot");
   assert.equal(readSharedRoute(new URL(url).hash), null);
 });

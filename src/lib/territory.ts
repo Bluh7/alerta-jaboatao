@@ -4,6 +4,10 @@ export type Location = { lat: number; lng: number };
 export const territory = boundary.geometry.coordinates[0].map(([lng, lat]) => ({ lat, lng }));
 export const cityCenter: Location = { lat: -8.145, lng: -35.005 };
 
+export function isValidLocation({ lat, lng }: Location) {
+  return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
 export function isInJaboatao({lat, lng}: Location) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
   let inside = false;

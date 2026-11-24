@@ -1,4 +1,4 @@
-import { isInJaboatao, type Location } from "./territory";
+import { isInJaboatao, isValidLocation, type Location } from "./territory";
 import { isTravelMode, type TravelMode, type TripPreview } from "./trip";
 
 export const sharedRoutePrefix = "#rota=";
@@ -6,8 +6,7 @@ export const sharedRoutePrefix = "#rota=";
 function isPoint(value: unknown): value is Location {
   if (!value || typeof value !== "object") return false;
   const { lat, lng } = value as Partial<Location>;
-  return typeof lat === "number" && Number.isFinite(lat) && Math.abs(lat) <= 90 &&
-    typeof lng === "number" && Number.isFinite(lng) && Math.abs(lng) <= 180;
+  return typeof lat === "number" && typeof lng === "number" && isValidLocation({ lat, lng });
 }
 
 export function routeShareUrl(url: string, route: TripPreview, mode: TravelMode) {
@@ -35,7 +34,7 @@ export function readSharedRoute(hash: string): { route: TripPreview; mode: Trave
     const encoded = hash.slice(sharedRoutePrefix.length).replace(/-/g, "+").replace(/_/g, "/");
     const bytes = Uint8Array.from(atob(encoded), char => char.charCodeAt(0));
     const { origin, destination, distance, duration, nearbyIncidents, path, mode } = JSON.parse(new TextDecoder().decode(bytes));
-    if (!isPoint(origin) || !isInJaboatao(origin) || !isPoint(destination) || !isInJaboatao(destination) ||
+    if (!isPoint(origin) || !isPoint(destination) || !isInJaboatao(destination) ||
         !("label" in origin) || typeof origin.label !== "string" || origin.label.length > 500 ||
         !("label" in destination) || typeof destination.label !== "string" || destination.label.length > 500 ||
         !Number.isFinite(distance) || distance <= 0 || !Number.isFinite(duration) || duration <= 0 ||

@@ -1,14 +1,14 @@
-import { isInJaboatao, type Location } from "../../../src/lib/territory";
+import { isInJaboatao, isValidLocation, type Location } from "../../../src/lib/territory";
 import { incidentStore } from "../../../src/server/incident-store";
 import { detourWaypoints, rankRoutes } from "../../../src/server/route-ranking";
 import { findRoadRoutes } from "../../../src/server/routing";
 import { readIncidentViewer } from "../../../src/server/incident-viewer";
 import { isTravelMode } from "../../../src/lib/trip";
 
-function routePoint(value: unknown): Location | null {
+function routePoint(value: unknown, allowed: (point: Location) => boolean): Location | null {
   if (!value || typeof value !== "object") return null;
   const { lat, lng } = value as Record<string, unknown>;
-  return typeof lat === "number" && typeof lng === "number" && isInJaboatao({ lat, lng }) ? { lat, lng } : null;
+  return typeof lat === "number" && typeof lng === "number" && allowed({ lat, lng }) ? { lat, lng } : null;
 }
 
 export async function POST(request: Request) {
@@ -17,10 +17,10 @@ export async function POST(request: Request) {
   if (!isTravelMode(mode)) {
     return Response.json({ error: "Escolha carro, caminhada ou bicicleta." }, { status: 400 });
   }
-  const origin = routePoint(body?.origin);
-  const destination = routePoint(body?.destination);
+  const origin = routePoint(body?.origin, isValidLocation);
+  const destination = routePoint(body?.destination, isInJaboatao);
   if (!origin || !destination) {
-    return Response.json({ error: "Escolha uma origem e um destino em Jaboatão." }, { status: 400 });
+    return Response.json({ error: "Escolha uma origem válida e um destino em Jaboatão." }, { status: 400 });
   }
   if (origin.lat === destination.lat && origin.lng === destination.lng) {
     return Response.json({ error: "Escolha um destino diferente da origem." }, { status: 400 });
