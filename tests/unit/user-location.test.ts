@@ -35,7 +35,7 @@ describe("acompanhamento da localização", () => {
     watch.move(-8.16178, -34.92483);
     expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.16178, lng: -34.92483 }, expect.any(String));
     watch.move(-8.05, -34.9);
-    expect(watch.update).toHaveBeenLastCalledWith(null, expect.stringContaining("fora da área de cobertura"));
+    expect(watch.update).toHaveBeenLastCalledWith(null, expect.stringContaining("fora da área de cobertura"), true);
     watch.move(-8.145, -35.005);
     expect(watch.update).toHaveBeenLastCalledWith({ lat: -8.145, lng: -35.005 }, expect.any(String));
     watch.stop();

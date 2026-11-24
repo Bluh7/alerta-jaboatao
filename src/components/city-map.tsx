@@ -98,6 +98,7 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
   onOpen: (incident: Incident) => void;
 }) {
   const container = useRef<HTMLDivElement>(null);
+  const coverageDialog = useRef<HTMLDialogElement>(null);
   const [map, setMap] = useState<L.Map | null>(null);
   const [tileError, setTileError] = useState(false);
   const [zoom, setZoom] = useState(cameraZoom.initial);
@@ -115,13 +116,18 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
     }
 
     let focused = false;
-    return watchUserLocation(geolocation, (point, status) => {
+    let wasOutside = false;
+    return watchUserLocation(geolocation, (point, status, outsideCoverage) => {
       setPosition(point);
-      setLocationStatus(status);
+      setLocationStatus(outsideCoverage ? "" : status);
+      const dialog = coverageDialog.current;
+      if (outsideCoverage && !wasOutside && dialog && !dialog.open) dialog.showModal();
+      if (outsideCoverage) wasOutside = true;
       if (point && !focused) {
         focused = true;
         map.setView(point, map.getZoom(), { animate: false });
       }
+      if (point) wasOutside = false;
     }, () => setLocating(false));
   }, [map, locating]);
 
@@ -247,10 +253,15 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
         title={locating ? "Parar de mostrar minha localização" : "Mostrar minha localização"} disabled={!map}
         onClick={() => {
           setPosition(null);
-          setLocationStatus(locating ? "Acompanhamento da localização desativado." : "Buscando sua localização…");
+          setLocationStatus(locating ? "" : "Buscando sua localização…");
           setLocating(!locating);
         }}><Navigation size={20} aria-hidden="true" /></button>
     </div>
+    <dialog ref={coverageDialog} className="coverage-dialog" aria-labelledby="coverage-heading" aria-describedby="coverage-description">
+      <h2 id="coverage-heading">Fora da área de cobertura</h2>
+      <p id="coverage-description">Sua localização só é exibida dentro de Jaboatão dos Guararapes.</p>
+      <form method="dialog"><button type="submit">OK</button></form>
+    </dialog>
     <div className="map-statuses">
       {tileError && <div className="tile-status" role="status">O mapa de ruas está indisponível.</div>}
       <div role="status">{locationStatus && <div className="tile-status">{locationStatus}</div>}</div>

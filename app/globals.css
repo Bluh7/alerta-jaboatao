@@ -150,6 +150,28 @@ button:disabled { cursor: wait; }
 .recenter { color: var(--accent); }
 .map-controls .location-toggle[aria-pressed=true] { color: var(--accent); background: var(--hover); }
 
+.coverage-dialog {
+  margin: auto;
+  width: min(360px, calc(100% - 32px));
+  padding: 24px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 16px 48px #152c4960;
+}
+.coverage-dialog::backdrop { background: #152c4966; }
+.coverage-dialog h2 { font-size: 1.125rem; font-weight: 700; }
+.coverage-dialog p { margin-block: 8px 20px; color: var(--muted); }
+.coverage-dialog form { display: flex; justify-content: end; }
+.coverage-dialog button {
+  padding: 9px 20px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+
 .map-credit {
   position: absolute;
   z-index: 600;
