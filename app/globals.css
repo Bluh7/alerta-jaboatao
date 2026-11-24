@@ -148,6 +148,7 @@ button:disabled { cursor: wait; }
 .map-controls button:hover { background: var(--hover); }
 .zoom-controls button:disabled { cursor: default; color: #687b8e; background: var(--background); }
 .recenter { color: var(--accent); }
+.map-controls .location-toggle[aria-pressed=true] { color: var(--accent); background: var(--hover); }
 
 .map-credit {
   position: absolute;
@@ -162,12 +163,19 @@ button:disabled { cursor: wait; }
 }
 
 .map-credit a { text-decoration: underline; text-underline-offset: 2px; }
-.tile-status {
+.map-statuses {
   position: absolute;
   z-index: 600;
   top: max(94px, calc(env(safe-area-inset-top) + 76px));
   left: var(--gutter);
-  max-width: calc(100vw - 96px);
+  width: max-content;
+  max-width: min(320px, calc(100vw - 96px));
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  pointer-events: none;
+}
+.tile-status {
   padding: 7px 10px;
   border-radius: 9px;
   background: var(--paper);

@@ -3,11 +3,12 @@
 import L from "leaflet";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { LocateFixed, MapPin, Minus, Plus } from "lucide-react";
+import { LocateFixed, MapPin, Minus, Navigation, Plus } from "lucide-react";
 import { categories, type Incident } from "../lib/incidents";
 import { isInJaboatao, territory, type Location } from "../lib/territory";
 import { IncidentIcon } from "./incident-icon";
 import type { TripPreview } from "../lib/trip";
+import { watchUserLocation } from "../lib/user-location";
 
 const initialCenter: Location = { lat: -8.16178, lng: -34.92483 }; // Mercado Velho de Prazeres
 const cameraZoom = { min: 17, initial: 17, max: 21 };
@@ -100,6 +101,38 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
   const [map, setMap] = useState<L.Map | null>(null);
   const [tileError, setTileError] = useState(false);
   const [zoom, setZoom] = useState(cameraZoom.initial);
+  const [locating, setLocating] = useState(false);
+  const [position, setPosition] = useState<Location | null>(null);
+  const [locationStatus, setLocationStatus] = useState("");
+
+  useEffect(() => {
+    if (!map || !locating) return;
+    const geolocation = navigator.geolocation;
+    if (!geolocation) {
+      setLocationStatus("A localização está indisponível. Use um navegador compatível em uma conexão segura.");
+      setLocating(false);
+      return;
+    }
+
+    let focused = false;
+    return watchUserLocation(geolocation, (point, status) => {
+      setPosition(point);
+      setLocationStatus(status);
+      if (point && !focused) {
+        focused = true;
+        map.setView(point, map.getZoom(), { animate: false });
+      }
+    }, () => setLocating(false));
+  }, [map, locating]);
+
+  useEffect(() => {
+    if (!map || !position) return;
+    const marker = L.circleMarker(position, {
+      interactive: false, radius: 8, color: "#fff", weight: 3,
+      fillColor: "#175ec4", fillOpacity: 1, className: "user-location-marker",
+    }).addTo(map);
+    return () => { marker.remove(); };
+  }, [map, position]);
 
   useEffect(() => {
     if (!container.current) return;
@@ -210,8 +243,18 @@ export default function CityMap({ incidents, selected, active, target, trip, onP
           if (trip) fitTrip(map, trip);
           else map.setView(initialCenter, cameraZoom.initial);
         }}><LocateFixed size={20} /></button>
+      <button className="location-toggle" type="button" aria-label="Minha localização" aria-pressed={locating}
+        title={locating ? "Parar de mostrar minha localização" : "Mostrar minha localização"} disabled={!map}
+        onClick={() => {
+          setPosition(null);
+          setLocationStatus(locating ? "Acompanhamento da localização desativado." : "Buscando sua localização…");
+          setLocating(!locating);
+        }}><Navigation size={20} aria-hidden="true" /></button>
     </div>
-    {tileError && <div className="tile-status" role="status">O mapa de ruas está indisponível.</div>}
+    <div className="map-statuses">
+      {tileError && <div className="tile-status" role="status">O mapa de ruas está indisponível.</div>}
+      <div role="status">{locationStatus && <div className="tile-status">{locationStatus}</div>}</div>
+    </div>
     <div className="map-credit"><a href="https://www.openstreetmap.org/copyright">© OpenStreetMap</a> · <a href="https://github.com/tbrugz/geodata-br">Malha municipal</a></div>
   </div>;
 }
