@@ -148,7 +148,20 @@ button:disabled { cursor: wait; }
 .map-controls button:hover { background: var(--hover); }
 .zoom-controls button:disabled { cursor: default; color: #687b8e; background: var(--background); }
 .recenter { color: var(--accent); }
-.map-controls .location-toggle[aria-pressed=true] { color: var(--accent); background: var(--hover); }
+.map-controls .location-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  padding-inline: 10px;
+  color: var(--muted);
+  font-size: .75rem;
+  font-weight: 700;
+}
+.map-controls .location-toggle[aria-pressed=true] {
+  background: var(--accent);
+  color: #fff;
+}
 
 .coverage-dialog {
   margin: auto;
