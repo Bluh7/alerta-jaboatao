@@ -1,0 +1,8 @@
+{
+  "origin": { "lat": -8.16178, "lng": -34.92483, "label": "Rua Origem · Prazeres" },
+  "destination": { "lat": -8.16178, "lng": -34.91983, "label": "Rua Destino · Prazeres" },
+  "near": { "lat": -8.16178, "lng": -34.92233 },
+  "alternate": { "lat": -8.159, "lng": -34.92233 },
+  "far": { "lat": -8.155, "lng": -34.92233 },
+  "outside": { "lat": -8.0476, "lng": -34.877 }
+}

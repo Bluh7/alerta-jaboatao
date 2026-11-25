@@ -19,6 +19,8 @@ Abra [localhost:3000](http://localhost:3000). A configuração padrão usa servi
 | `npm test` | Executa todos os testes com Vitest |
 | `npm run test:unit` | Executa os testes unitários |
 | `npm run test:integration` | Executa os testes de integração |
+| `npm run test:e2e` | Executa os testes Cypress com Electron em modo headless |
+| `npm run test:e2e:open` | Abre a interface do Cypress com a aplicação de testes |
 | `npm run typecheck` | Verifica os tipos do TypeScript |
 | `npm run build` | Gera o build de produção |
 | `npm start` | Serve o build de produção |
@@ -32,9 +34,17 @@ Execute `npm test`, `npm run typecheck` e `npm run build` para rodar a suíte co
 
 Os testes dos serviços externos usam respostas simuladas. A disponibilidade do Photon e do OSRM pode ser verificada na aplicação em execução.
 
+### Testes E2E
+
+Após `npm ci`, execute `npm run test:e2e`. O comando gera o build, inicia a aplicação em `http://localhost:3417` e usa respostas locais para Photon, OSRM e tiles do mapa. Mantenha a porta 3417 livre durante a execução. A primeira instalação do Cypress baixa o navegador usado pela suíte.
+
+Os testes estão em [cypress/e2e](cypress/e2e) e seus títulos incluem os IDs do plano. Para rodar um arquivo, use `npm run test:e2e -- --spec cypress/e2e/live.cy.ts`. O cenário de expiração ao vivo usa o relógio do servidor e leva cerca de 45 segundos.
+
+Cada teste de UI aprovado salva um PNG da tela final em `cypress/screenshots/AAAA-MM-DD/HH-MM-SS-id/arquivo.cy.ts/`. A data e a hora usam o fuso de São Paulo. Cada execução headless e cada repetição de um arquivo no modo interativo recebe uma pasta nova, e as capturas anteriores são preservadas. O Cypress também mantém as capturas automáticas de falhas em modo headless. As imagens ficam como artefatos locais ignorados pelo Git.
+
 ## Usar a aplicação
 
-- **Mapa.** Clique ou toque em um ponto dentro do município e escolha uma categoria para registrar a ocorrência. Abra um marcador para ver os detalhes, curtir ou enviar mensagens. Quem registrou pode editar a categoria e a descrição ou excluir o registro. Outras pessoas podem ocultá-lo para o próprio navegador e desfazer a ação.
+- **Mapa.** Cada ocorrência aparece com um círculo de 150 m de raio na cor da categoria, o mesmo raio usado para comparar trajetos. Clique ou toque em um ponto dentro do município e escolha uma categoria para registrar a ocorrência. Abra um marcador para ver os detalhes, curtir ou enviar mensagens. Quem registrou pode editar a categoria e a descrição ou excluir o registro. Outras pessoas podem ocultá-lo para o próprio navegador e desfazer a ação.
 - **Minha localização.** Use o botão com a seta de navegação no mapa e conceda a permissão solicitada pelo navegador. O ponto azul acompanha sua posição dentro e fora de Jaboatão. Use o mesmo botão para interromper o acompanhamento. O recurso exige HTTPS ou acesso local por `localhost`.
 - **Diário.** Exibe as ocorrências do dia no fuso `America/Recife` e atualiza a lista a cada 30 segundos enquanto está aberto. Quando o Photon encontra uma referência próxima, ela aparece ao lado do horário. Selecionar um registro leva ao ponto original no mapa.
 - **Rotas.** Escolha um destino em Jaboatão, compare alternativas e selecione um trajeto. Com a localização ativa, o planejador usa sua posição como origem por padrão, inclusive fora do município. Desmarque **Usar minha localização como origem** para buscar um endereço de origem em Jaboatão. Use **Copiar link** para compartilhar o trajeto escolhido.

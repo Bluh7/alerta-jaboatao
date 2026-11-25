@@ -7,12 +7,13 @@ import { LocateFixed, MapPin, Minus, Navigation, Plus } from "lucide-react";
 import { categories, type Incident } from "../lib/incidents";
 import { isInJaboatao, territory, type Location } from "../lib/territory";
 import { IncidentIcon } from "./incident-icon";
-import type { TripPreview } from "../lib/trip";
+import { incidentRadiusMeters, type TripPreview } from "../lib/trip";
 import { watchUserLocation } from "../lib/user-location";
 
 const initialCenter: Location = { lat: -8.16178, lng: -34.92483 }; // Mercado Velho de Prazeres
 const cameraZoom = { min: 17, initial: 17, max: 21 };
 const tripOverviewMinZoom = 10;
+const incidentAreaPane = "incident-areas";
 
 function fitTrip(map: L.Map, trip: TripPreview) {
   const bounds = L.latLngBounds([...trip.path, trip.origin, trip.destination]);
@@ -41,6 +42,22 @@ function MapPinLayer({ map, location, incident, active, onOpen }: {
   const [content] = useState(() => document.createElement("span"));
   const markerRef = useRef<L.Marker | null>(null);
   const { lat, lng } = location;
+  const color = incident && categories[incident.category].color;
+
+  useEffect(() => {
+    if (!color) return;
+    const area = L.circle([lat, lng], {
+      pane: incidentAreaPane,
+      className: "incident-area",
+      radius: incidentRadiusMeters,
+      color,
+      weight: 2,
+      opacity: 0.55,
+      fillOpacity: 0.16,
+      interactive: false,
+    }).addTo(map);
+    return () => { area.remove(); };
+  }, [map, lat, lng, color]);
 
   useEffect(() => {
     const label = incident ? categories[incident.category].label : "Ponto selecionado";
@@ -182,6 +199,9 @@ export default function CityMap({ incidents, selected, active, target, trip, pos
       minZoom: cameraZoom.min, maxZoom: cameraZoom.max,
       attributionControl: false,
     });
+    const areaPane = instance.createPane(incidentAreaPane);
+    areaPane.style.zIndex = "390";
+    areaPane.style.pointerEvents = "none";
     const tiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       noWrap: true, maxZoom: cameraZoom.max, maxNativeZoom: 19,
     });

@@ -162,7 +162,7 @@ export default function Dashboard() {
 
   function closeDiary() {
     setShowDiary(false);
-    diaryToggle.current?.focus({ preventScroll: true });
+    requestAnimationFrame(() => diaryToggle.current?.focus({ preventScroll: true }));
   }
 
   function toggleDiary() {

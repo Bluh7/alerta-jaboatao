@@ -11,26 +11,29 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
-    "typecheck": "tsc --noEmit"
+    "test:e2e": "node cypress/run.mjs",
+    "test:e2e:open": "node cypress/run.mjs open",
+    "typecheck": "tsc --noEmit && tsc -p cypress/tsconfig.json"
   },
   "dependencies": {
-    "next": "^16.0.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "@prisma/client": "^6.19.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",
-    "@prisma/client": "^6.19.0"
+    "next": "^16.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
   },
   "devDependencies": {
-    "prisma": "^6.19.0",
-    "typescript": "^5.9.0",
-    "tailwindcss": "^4.1.0",
     "@tailwindcss/postcss": "^4.1.0",
-    "postcss": "^8.5.0",
-    "vitest": "^4.0.0",
+    "@types/leaflet": "^1.9.0",
     "@types/node": "^24.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "@types/leaflet": "^1.9.0"
+    "cypress": "16.3.0",
+    "postcss": "^8.5.0",
+    "prisma": "^6.19.0",
+    "tailwindcss": "^4.1.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
   }
 }
