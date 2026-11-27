@@ -1,6 +1,6 @@
-import { ApiError, GoogleGenAI } from "@google/genai";
+import { ApiError, FunctionCallingConfigMode, GoogleGenAI } from "@google/genai";
 import { chatHistoryTokenLimit, chatQuestionLimit, chatReplyLimit } from "../../../src/lib/incident-chat";
-import { buildIncidentChatPrompt, parseChatInput } from "../../../src/server/incident-chat";
+import { incidentSearch, parseChatInput, recentIncidentResult, systemInstruction } from "../../../src/server/incident-chat";
 import { incidentStore } from "../../../src/server/incident-store";
 import { readIncidentViewer } from "../../../src/server/incident-viewer";
 
@@ -19,8 +19,6 @@ export async function POST(request: Request) {
   if (!apiKey) return error("O assistente está indisponível no momento.", 503);
 
   try {
-    const incidents = await incidentStore.list(readIncidentViewer(request));
-    const systemInstruction = await buildIncidentChatPrompt(incidents);
     const ai = new GoogleGenAI({ apiKey, enterprise: false });
     const model = "gemini-3.5-flash-lite";
     const config = { abortSignal: request.signal, httpOptions: { timeout: 15_000 } };
@@ -48,15 +46,33 @@ export async function POST(request: Request) {
       return totalTokens < chatHistoryTokenLimit;
     }
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: contents.slice(omittedTurns * 2),
-      config: {
-        systemInstruction,
-        maxOutputTokens: 600,
-        ...config,
-      },
-    });
+    const conversation = contents.slice(omittedTurns * 2);
+    const generation = {
+      ...config, systemInstruction, maxOutputTokens: 600,
+      tools: [{ functionDeclarations: [incidentSearch] }],
+    };
+    let response = await ai.models.generateContent({ model, contents: conversation, config: generation });
+    const calls = response.functionCalls;
+    if (calls?.length) {
+      const turn = response.candidates?.[0].content;
+      if (!turn || calls.some(call => call.name !== incidentSearch.name)) {
+        return error("O assistente solicitou uma consulta desconhecida.", 502);
+      }
+      const result = await recentIncidentResult(await incidentStore.list(readIncidentViewer(request)));
+      response = await ai.models.generateContent({
+        model,
+        contents: [...conversation, turn, {
+          role: "user",
+          parts: calls.map(call => ({
+            functionResponse: { name: incidentSearch.name, id: call.id, response: result },
+          })),
+        }],
+        config: {
+          ...generation,
+          toolConfig: { functionCallingConfig: { mode: FunctionCallingConfigMode.NONE } },
+        },
+      });
+    }
     const reply = response.text?.trim().slice(0, chatReplyLimit);
     if (!reply) return error("Não foi possível responder a essa pergunta. Tente reformulá-la.", 502);
     return Response.json({ reply }, { headers: {

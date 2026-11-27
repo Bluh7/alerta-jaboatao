@@ -21,7 +21,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("atualiza o XML a cada pergunta e envia ao Gemini somente os campos necessários dos registros recentes", async () => {
+it("consulta as ocorrências sob demanda e devolve apenas os campos necessários pela ferramenta", async () => {
   vi.stubEnv("GEMINI_KEY", "chave-de-teste");
   vi.setSystemTime(new Date("2026-11-25T15:00:00.000Z"));
   const incident: Incident = {
@@ -44,8 +44,26 @@ it("atualiza o XML a cada pergunta e envia ao Gemini somente os campos necessár
     assert.match(url.pathname, /\/models\/gemini-3\.5-flash-lite:generateContent$/);
     assert.equal(new Headers(init.headers).get("x-goog-api-key"), "chave-de-teste");
     const body = JSON.parse(String(init.body));
+    assert.doesNotMatch(body.systemInstruction.parts[0].text, /<contexto|Área &|omitir-identificador/);
+    const toolResult = body.contents.at(-1).parts[0].functionResponse;
+    if (toolResult) {
+      assert.equal(toolResult.name, "buscar_ocorrencias");
+      assert.equal(toolResult.id, "consulta");
+      const result = toolResult.response;
+      assert.equal(result.total, calls.length === 1 ? 1 : 0);
+      assert.deepEqual(result.ocorrencias, calls.length === 1 ? [{
+        categoria: "Barulho", horario_registro: result.ocorrencias[0].horario_registro,
+        bairro: "Área & <referência>",
+      }] : []);
+      if (result.total) assert.match(result.ocorrencias[0].horario_registro, /11:30/);
+      return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: "Há um relato de barulho." }] } }] });
+    }
+    assert.equal(list.mock.calls.length, calls.length);
+    assert.equal(body.tools[0].functionDeclarations[0].name, "buscar_ocorrencias");
     calls.push({ prompt: body.systemInstruction.parts[0].text, contents: body.contents });
-    return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: "Há um relato de barulho." }] } }] });
+    return Response.json({ candidates: [{ content: { role: "model", parts: [{
+      functionCall: { name: "buscar_ocorrencias", args: {}, id: "consulta" },
+    }] } }] });
   }));
 
   const first = await ask({ message: "O que foi registrado?" });
@@ -60,13 +78,6 @@ it("atualiza o XML a cada pergunta e envia ao Gemini somente os campos necessár
   assert.equal((await ask({ message: "E agora?", history })).status, 200);
   assert.deepEqual(list.mock.calls, [[viewer], [viewer]]);
   assert.match(calls[0].prompt, /<exemplos ficticios="true">/);
-  assert.match(calls[0].prompt, /total="1" fornecidos="1"/);
-  assert.match(calls[0].prompt, /<categoria>Barulho<\/categoria>/);
-  assert.match(calls[0].prompt, /<horario_registro>[^<]+11:30<\/horario_registro>/);
-  assert.match(calls[0].prompt, /<bairro>Área &amp; &lt;referência&gt;<\/bairro>/);
-  assert.doesNotMatch(calls[0].prompt, /<categoria>Assalto|Omitir|omitir-identificador|-34\.999/);
-  assert.match(calls[1].prompt, /total="0" fornecidos="0"/);
-  assert.doesNotMatch(calls[1].prompt, /<ocorrencia>/);
   assert.deepEqual(calls[1].contents, [
     { role: "user", parts: [{ text: history[0].text }] },
     { role: "model", parts: [{ text: history[1].text }] },
