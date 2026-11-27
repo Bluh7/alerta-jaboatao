@@ -186,7 +186,7 @@ O autor exclui a ocorrência com uma requisição sem corpo. Retorna `204` sem c
 {"message":"O que foi registrado hoje em Prazeres?"}
 ```
 
-`message` aceita até 1000 caracteres. `history` é opcional e aceita até oito mensagens no formato `{role, text}`, em pares `user` e `assistant`. Envie o cookie `alerta_viewer` para aplicar as preferências de ocultação da sessão.
+`message` aceita até 1000 caracteres. `history` é opcional e recebe mensagens no formato `{role, text}`, em pares `user` e `assistant` do mais antigo ao mais recente. Envie o cookie `alerta_viewer` para aplicar as preferências de ocultação da sessão.
 
 Retorna `200` com `{reply}`, `400` para pergunta ou histórico inválido, `415` para requisição sem `Content-Type: application/json`, `429` quando a cota do Gemini é atingida, `502` quando o Gemini não retorna texto ou `503` quando o assistente está indisponível.
 

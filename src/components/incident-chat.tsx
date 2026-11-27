@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type PointerEvent, type RefObject } from "react";
 import { ArrowUp, Minus, Shield } from "lucide-react";
-import { chatHistoryLimit, chatQuestionLimit, type ChatMessage } from "../lib/incident-chat";
+import { chatQuestionLimit, type ChatMessage } from "../lib/incident-chat";
 import { usePanelViewport } from "./use-panel-viewport";
 
 const suggestions = [
@@ -45,6 +45,7 @@ type Drag = { id: number; startX: number; startY: number; offsetX: number; offse
 
 export function IncidentChat({ actionArea }: { actionArea: RefObject<HTMLDivElement | null> }) {
   const widget = useRef<HTMLDivElement>(null);
+  const historyStart = useRef(0);
   const launcher = useRef<HTMLButtonElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
   const conversation = useRef<HTMLDivElement>(null);
@@ -193,7 +194,10 @@ export function IncidentChat({ actionArea }: { actionArea: RefObject<HTMLDivElem
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history: messages.slice(-chatHistoryLimit).map(({ role, text }) => ({ role, text })) }),
+        body: JSON.stringify({
+          message,
+          history: messages.slice(historyStart.current).map(({ role, text }) => ({ role, text })),
+        }),
         signal: controller.signal,
       });
       const body = await response.json().catch(() => null);
@@ -202,6 +206,10 @@ export function IncidentChat({ actionArea }: { actionArea: RefObject<HTMLDivElem
         setDraft(message);
         setError(typeof body?.error === "string" ? body.error : requestError);
         return;
+      }
+      const omitted = Number(response.headers.get("X-Chat-History-Omitted"));
+      if (Number.isInteger(omitted) && omitted > 0 && omitted % 2 === 0 && omitted <= messages.length - historyStart.current) {
+        historyStart.current += omitted;
       }
       setMessages(current => [...current, outgoing, { role: "assistant", text: body.reply, sentAt: Date.now() }]);
     } catch {

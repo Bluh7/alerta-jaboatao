@@ -1,5 +1,5 @@
 import { ApiError, GoogleGenAI } from "@google/genai";
-import { chatQuestionLimit, chatReplyLimit } from "../../../src/lib/incident-chat";
+import { chatHistoryTokenLimit, chatQuestionLimit, chatReplyLimit } from "../../../src/lib/incident-chat";
 import { buildIncidentChatPrompt, parseChatInput } from "../../../src/server/incident-chat";
 import { incidentStore } from "../../../src/server/incident-store";
 import { readIncidentViewer } from "../../../src/server/incident-viewer";
@@ -22,19 +22,47 @@ export async function POST(request: Request) {
     const incidents = await incidentStore.list(readIncidentViewer(request));
     const systemInstruction = await buildIncidentChatPrompt(incidents);
     const ai = new GoogleGenAI({ apiKey, enterprise: false });
+    const model = "gemini-3.5-flash-lite";
+    const config = { abortSignal: request.signal, httpOptions: { timeout: 15_000 } };
+    const contents = messages.map(({ role, text }) => ({
+      role: role === "assistant" ? "model" : role,
+      parts: [{ text }],
+    }));
+    const history = contents.slice(0, -1);
+    let omittedTurns = 0;
+    let end = history.length / 2;
+    if (end > 0 && !(await fits(0))) {
+      omittedTurns = 1;
+      while (omittedTurns < end) {
+        const middle = Math.floor((omittedTurns + end) / 2);
+        if (await fits(middle)) end = middle;
+        else omittedTurns = middle + 1;
+      }
+    }
+
+    async function fits(omittedTurns: number) {
+      const { totalTokens } = await ai.models.countTokens({
+        model, contents: history.slice(omittedTurns * 2), config,
+      });
+      if (totalTokens === undefined) throw new Error("Gemini did not return a token count");
+      return totalTokens < chatHistoryTokenLimit;
+    }
+
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash-lite",
-      contents: messages.map(({ role, text }) => ({ role: role === "assistant" ? "model" : role, parts: [{ text }] })),
+      model,
+      contents: contents.slice(omittedTurns * 2),
       config: {
         systemInstruction,
         maxOutputTokens: 600,
-        abortSignal: request.signal,
-        httpOptions: { timeout: 15_000 },
+        ...config,
       },
     });
     const reply = response.text?.trim().slice(0, chatReplyLimit);
     if (!reply) return error("Não foi possível responder a essa pergunta. Tente reformulá-la.", 502);
-    return Response.json({ reply }, { headers: { "Cache-Control": "private, no-store" } });
+    return Response.json({ reply }, { headers: {
+      "Cache-Control": "private, no-store",
+      "X-Chat-History-Omitted": String(omittedTurns * 2),
+    } });
   } catch (cause) {
     if (cause instanceof ApiError && cause.status === 429) {
       return error("O assistente atingiu o limite de consultas. Tente novamente mais tarde.", 429);

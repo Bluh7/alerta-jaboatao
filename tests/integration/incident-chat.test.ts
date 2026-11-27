@@ -40,6 +40,7 @@ it("atualiza o XML a cada pergunta e envia ao Gemini somente os campos necessár
     }
 
     assert.equal(url.hostname, "generativelanguage.googleapis.com");
+    if (url.pathname.endsWith(":countTokens")) return Response.json({ totalTokens: 20 });
     assert.match(url.pathname, /\/models\/gemini-3\.5-flash-lite:generateContent$/);
     assert.equal(new Headers(init.headers).get("x-goog-api-key"), "chave-de-teste");
     const body = JSON.parse(String(init.body));
@@ -71,6 +72,30 @@ it("atualiza o XML a cada pergunta e envia ao Gemini somente os campos necessár
     { role: "model", parts: [{ text: history[1].text }] },
     { role: "user", parts: [{ text: "E agora?" }] },
   ]);
+});
+
+it("preserva as trocas recentes ao atingir o limite de tokens do histórico", async () => {
+  vi.stubEnv("GEMINI_KEY", "chave-de-teste");
+  vi.spyOn(incidentStore, "list").mockResolvedValue([]);
+  const history = Array.from({ length: 5 }, (_, i) => [
+    { role: "user", text: `Pergunta ${i}` },
+    { role: "assistant", text: `Resposta ${i}` },
+  ]).flat();
+  const message = "E agora?";
+  vi.stubGlobal("fetch", vi.fn(async (input: string | URL, init: RequestInit) => {
+    const body = JSON.parse(String(init.body));
+    const texts = body.contents.map((entry: { parts: { text: string }[] }) => entry.parts[0].text);
+    if (new URL(input).pathname.endsWith(":countTokens")) {
+      assert.ok(!texts.includes(message));
+      assert.equal(body.systemInstruction, undefined);
+      return Response.json({ totalTokens: texts.length * 500 });
+    }
+    assert.deepEqual(texts, [...history.slice(2).map(entry => entry.text), message]);
+    return Response.json({ candidates: [{ content: { role: "model", parts: [{ text: "Resposta contextual" }] } }] });
+  }));
+  const response = await ask({ message, history });
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("X-Chat-History-Omitted"), "2");
 });
 
 it("rejeita histórico inválido e trata a falta de configuração e a cota do Gemini", async () => {
