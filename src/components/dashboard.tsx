@@ -8,6 +8,7 @@ import type { Location } from "../lib/territory";
 import { IncidentIcon } from "./incident-icon";
 import { IncidentPicker } from "./incident-picker";
 import { IncidentDiary } from "./incident-diary";
+import { IncidentChat } from "./incident-chat";
 import { changeIncident, IncidentDetails } from "./incident-details";
 import { RoutePlanner } from "./route-planner";
 import { RouteSummary } from "./route-summary";
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const pending = useRef(false);
   const revision = useRef(0);
   const diaryToggle = useRef<HTMLButtonElement>(null);
+  const actionArea = useRef<HTMLDivElement>(null);
 
   useEffect(() => () => routeRequest.current?.abort(), []);
 
@@ -337,7 +339,7 @@ export default function Dashboard() {
 
     <MapQuickActions hasTrip={Boolean(trip)} disabled={Boolean(saving)} onRoute={openRoutePlanner} />
 
-    <div className="action-area">
+    <div className="action-area" ref={actionArea}>
       {notice && <div className="map-notice" role="status">
         {notice.success ? <Check size={18} /> : <CircleAlert size={18} />}
         <span>{notice.text}</span>
@@ -368,5 +370,6 @@ export default function Dashboard() {
           }
         }} /> : null}
     </div>
+    <IncidentChat actionArea={actionArea} />
   </main>;
 }
