@@ -13,6 +13,8 @@ npm run dev
 
 Abra [localhost:3000](http://localhost:3000). A configuração padrão usa serviços públicos para carregar o mapa, buscar endereços e calcular rotas. Os registros ficam em memória e o servidor inicia sem configuração de ambiente ou banco de dados.
 
+Para ativar o assistente, adicione `GEMINI_KEY=sua_chave` ao arquivo `.env` na raiz e reinicie o servidor. Use uma chave de um projeto no plano gratuito do Google AI Studio. O servidor usa o SDK `@google/genai` com o modelo `gemini-3.5-flash-lite`. [Gerenciar chaves no Google AI Studio](https://aistudio.google.com/api-keys) · [Plano gratuito do Gemini](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite)
+
 | Comando | Finalidade |
 | --- | --- |
 | `npm run dev` | Inicia o servidor de desenvolvimento |
@@ -47,6 +49,7 @@ Cada teste de UI aprovado salva um PNG da tela final em `cypress/screenshots/AAA
 - **Mapa.** Cada ocorrência aparece com um círculo de 150 m de raio na cor da categoria, o mesmo raio usado para comparar trajetos. Clique ou toque em um ponto dentro do município e escolha uma categoria para registrar a ocorrência. Abra um marcador para ver os detalhes, curtir ou enviar mensagens. Quem registrou pode editar a categoria e a descrição ou excluir o registro. Outras pessoas podem ocultá-lo para o próprio navegador e desfazer a ação.
 - **Minha localização.** Use o botão com a seta de navegação no mapa e conceda a permissão solicitada pelo navegador. O ponto azul acompanha sua posição dentro e fora de Jaboatão. Use o mesmo botão para interromper o acompanhamento. O recurso exige HTTPS ou acesso local por `localhost`.
 - **Diário.** Exibe as ocorrências do dia no fuso `America/Recife` e atualiza a lista a cada 30 segundos enquanto está aberto. Quando o Photon encontra uma referência próxima, ela aparece ao lado do horário. Selecionar um registro leva ao ponto original no mapa.
+- **Assistente.** Abra o menu pelo ícone flutuante no mapa. Arraste o ícone, ou use as setas com o botão em foco, para mudar de canto. A cada pergunta, o servidor monta um prompt XML com exemplos fictícios e até 20 ocorrências visíveis mais recentes das últimas 24 horas, com categoria, horário do registro e bairro quando disponível. A pergunta e as mensagens recentes da conversa também são enviadas ao Gemini. Evite incluir dados pessoais. [Política de dados do plano gratuito](https://aistudio.google.com/docs/terms#data-use-unpaid)
 - **Rotas.** Escolha um destino em Jaboatão, compare alternativas e selecione um trajeto. Com a localização ativa, o planejador usa sua posição como origem por padrão, inclusive fora do município. Desmarque **Usar minha localização como origem** para buscar um endereço de origem em Jaboatão. Use **Copiar link** para compartilhar o trajeto escolhido.
 - **Acompanhamento ao vivo.** Com a rota escolhida e sua localização ativa, selecione **Compartilhar ao vivo** e envie o link de acompanhamento. Quem tiver o link pode ver a rota e sua posição atual. Mantenha a página, o resumo da rota e a localização ativos. Use **Encerrar compartilhamento** para desligar o link. A sessão também é encerrada ao sair do resumo ou quando a localização fica indisponível. Se a página perder a conexão antes de encerrar, a sessão expira após 45 segundos sem atualização.
 - **Emergência.** Em telas de até 540 px, o atalho **Emergência 190** abre o discador com o número preenchido.
@@ -95,6 +98,7 @@ Os exemplos usam caminhos relativos à aplicação. Envie corpos de `POST`, `PUT
 | `PUT` | [`/api/incidents/{id}`](#put-apiincidentsid) | Substitui a categoria e a descrição |
 | `PATCH` | [`/api/incidents/{id}`](#patch-apiincidentsid) | Atualiza curtidas, mensagens ou ocultação |
 | `DELETE` | [`/api/incidents/{id}`](#delete-apiincidentsid) | Exclui a ocorrência |
+| `POST` | [`/api/chat`](#post-apichat) | Responde a perguntas sobre ocorrências recentes |
 | `POST` | [`/api/route-addresses`](#post-apiroute-addresses) | Busca endereços em Jaboatão |
 | `POST` | [`/api/routes`](#post-apiroutes) | Calcula e ordena alternativas de trajeto |
 | `POST` | [`/api/live-routes`](#post-apilive-routes) | Inicia um acompanhamento |
@@ -175,6 +179,16 @@ Substitua `{id}` pelo UUID da ocorrência e envie uma ação por requisição.
 ### DELETE /api/incidents/{id}
 
 O autor exclui a ocorrência com uma requisição sem corpo. Retorna `204` sem corpo em caso de sucesso, `403` para sessão sem permissão ou `404` para ocorrência ausente ou oculta.
+
+### POST /api/chat
+
+```json
+{"message":"O que foi registrado hoje em Prazeres?"}
+```
+
+`message` aceita até 1000 caracteres. `history` é opcional e aceita até oito mensagens no formato `{role, text}`, em pares `user` e `assistant`. Envie o cookie `alerta_viewer` para aplicar as preferências de ocultação da sessão.
+
+Retorna `200` com `{reply}`, `400` para pergunta ou histórico inválido, `415` para requisição sem `Content-Type: application/json`, `429` quando a cota do Gemini é atingida, `502` quando o Gemini não retorna texto ou `503` quando o assistente está indisponível.
 
 ### POST /api/route-addresses
 
