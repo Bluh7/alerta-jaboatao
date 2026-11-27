@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit && tsc -p cypress/tsconfig.json"
   },
   "dependencies": {
+    "@google/genai": "^2.32.0",
     "@prisma/client": "^6.19.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",
